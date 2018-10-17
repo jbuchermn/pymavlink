@@ -30,6 +30,10 @@ from builtins import range
 from builtins import object
 import struct, array, time, json, os, sys, platform
 
+def struct_pack(fmt, *args):
+    args = [a.encode('utf-8') if isinstance(a, 'str') and not isinstance(a, 'bytes') else a for a in args]
+    return struct.pack(fmt, *args)
+
 from ...generator.mavcrc import x25crc
 import hashlib
 
@@ -86,11 +90,11 @@ class MAVLink_header(object):
 
     def pack(self, force_mavlink1=False):
         if WIRE_PROTOCOL_VERSION == '2.0' and not force_mavlink1:
-            return struct.pack('<BBBBBBBHB', ${PROTOCOL_MARKER}, self.mlen,
+            return struct_pack('<BBBBBBBHB', ${PROTOCOL_MARKER}, self.mlen,
                                self.incompat_flags, self.compat_flags,
                                self.seq, self.srcSystem, self.srcComponent,
                                self.msgId&0xFFFF, self.msgId>>16)
-        return struct.pack('<BBBBBB', PROTOCOL_MARKER_V1, self.mlen, self.seq,
+        return struct_pack('<BBBBBB', PROTOCOL_MARKER_V1, self.mlen, self.seq,
                            self.srcSystem, self.srcComponent, self.msgId)
 
 class MAVLink_message(object):
@@ -199,7 +203,7 @@ class MAVLink_message(object):
 
     def sign_packet(self, mav):
         h = hashlib.new('sha256')
-        self._msgbuf += struct.pack('<BQ', mav.signing.link_id, mav.signing.timestamp)[:7]
+        self._msgbuf += struct_pack('<BQ', mav.signing.link_id, mav.signing.timestamp)[:7]
         h.update(mav.signing.secret_key)
         h.update(self._msgbuf)
         sig = h.digest()[:6]
@@ -224,9 +228,9 @@ class MAVLink_message(object):
         self._msgbuf = self._header.pack(force_mavlink1=force_mavlink1) + self._payload
         crc = x25crc(self._msgbuf[1:])
         if ${crc_extra}: # using CRC extra
-            crc.accumulate_str(struct.pack('B', crc_extra))
+            crc.accumulate_str(struct_pack('B', crc_extra))
         self._crc = crc.crc
-        self._msgbuf += struct.pack('<H', self._crc)
+        self._msgbuf += struct_pack('<H', self._crc)
         if mav.signing.sign_outgoing and not force_mavlink1:
             self.sign_packet(mav)
         return self._msgbuf
@@ -326,7 +330,7 @@ class %s(MAVLink_message):
                 outf.write("                self.%s = %s\n" % (f.name, f.name))
         outf.write("""
         def pack(self, mav, force_mavlink1=False):
-                return MAVLink_message.pack(self, mav, %u, struct.pack('%s'""" % (m.crc_extra, m.fmtstr))
+                return MAVLink_message.pack(self, mav, %u, struct_pack('%s'""" % (m.crc_extra, m.fmtstr))
         for field in m.ordered_fields:
                 if (field.type != "char" and field.array_length > 1):
                         for i in range(field.array_length):
